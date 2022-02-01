@@ -31,6 +31,7 @@ const Home = (props) => {
 
   const screenActionsCallback = (action) => {
     if (action === "add") {
+      props.setViewHome(null)
       navigation.navigate('HomeForm', {home: null});
     }
   }

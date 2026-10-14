@@ -8,7 +8,7 @@
 import {SET_VIEW_HOME, SET_USER_HOMES} from '../actions/home';
 
 const initialState = {
-  homes: null,
+  homes: [],
   viewHome: null,
   lastRefresh: null
 }

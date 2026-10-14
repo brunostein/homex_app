@@ -1,103 +1,55 @@
-import * as React from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { connect } from 'react-redux';
-import { Appbar, Avatar, Card, IconButton, Button, TextInput } from 'react-native-paper';
-import { useRoute } from '@react-navigation/native';
-import { useNavigation } from '@react-navigation/native';
-import { getUserHomes, createHome, updateHome } from '../services/api-homes';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { createCategory, updateCategory } from '../services/api-categories';
-import AppLayout from '../components/AppLayout';
-import { headerStyles } from '../AppStyles';
+import { FormScreen, FormField, FormFeedback, FormActions, FormContext, styles, colors, formError } from '../components/forms/FormKit';
 
-const HomeCategoryForm = (props) => {
-
+function HomeCategoryForm({ viewHome }) {
   const route = useRoute();
   const navigation = useNavigation();
-  const [category, setCategory] = React.useState(null);
-  const [name, setName] = React.useState('');
-  
-  const onAddCategory = () => {
+  const category = route.params?.category || null;
+  const [name, setName] = useState('');
+  const [attempted, setAttempted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const back = () => navigation.navigate('HomeItems', { filter: 'all' });
 
-    let data = {
-      home_id: props.viewHome.id,
-      name,
-    }
+  useEffect(() => {
+    setName(category?.name || '');
+    setAttempted(false);
+    setError('');
+  }, [category, viewHome?.id]);
 
-    createCategory(data).then(result => {
-      if (result !== null && result.success === true) {
-        navigation.navigate('HomeItems');
-      }
-    });
-  }
-  
-  const onUpdateCategory = () => {
+  const submit = async () => {
+    if (loading) return;
+    setAttempted(true);
+    setError('');
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      const result = category ? await updateCategory(category.id, { name: name.trim() }) : await createCategory({ home_id: viewHome.id, name: name.trim() });
+      if (!result?.success) { setError(formError(result)); return; }
+      back();
+    } catch (err) { setError(formError(err)); }
+    finally { setLoading(false); }
+  };
 
-    let data = {
-      name,
-    }
+  if (!viewHome) return null;
+  return <FormScreen title={category ? 'Editar categoria' : 'Nova categoria'} subtitle="Agrupe seus itens por tipo. O ambiente e a gaveta são definidos no local de cada item." eyebrow="ORGANIZAR INVENTÁRIO" icon="view-grid-plus-outline" onBack={back}>
+    <FormContext>{viewHome.name}</FormContext>
+    <Text style={styles.sectionTitle}>{category ? 'Detalhes da categoria' : 'Crie uma categoria'}</Text>
+    <Text style={styles.sectionDescription}>Fica mais fácil encontrar o que você precisa.</Text>
+    <FormFeedback message={error} />
+    <FormField label="Nome" icon="tag-outline" placeholder="Ex.: Alimentos" value={name} editable={!loading} maxLength={255} error={attempted && !name.trim() ? 'Informe o nome da categoria.' : ''} onChangeText={text => { setName(text); setError(''); }} returnKeyType="done" onSubmitEditing={submit} />
+    {!category && <View style={{ marginBottom: 26 }}>
+      <Text style={[styles.helper, { marginTop: 0, marginBottom: 10 }]}>PRECISA DE UMA IDEIA?</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {['Alimentos', 'Limpeza', 'Ferramentas', 'Utensílios'].map(suggestion => <Pressable key={suggestion} accessibilityRole="button" accessibilityLabel={`Usar sugestão ${suggestion}`} accessibilityState={{ selected: name === suggestion }} disabled={loading} onPress={() => setName(suggestion)} style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 9, borderWidth: 1, borderColor: name === suggestion ? colors.primary : colors.border, backgroundColor: name === suggestion ? '#EAF2F2' : '#F8FAFB' }}><Text style={{ color: colors.primary, fontSize: 13 }}>{suggestion}</Text></Pressable>)}
+      </View>
+    </View>}
+    <FormActions onCancel={back} onSubmit={submit} loading={loading} label={category ? 'Salvar alterações' : 'Criar categoria'} icon={category ? 'check' : 'plus'} />
+  </FormScreen>;
+}
 
-    updateCategory(category.id, data).then(result => {
-      if (result !== null && result.success === true) {
-        navigation.navigate('HomeItems');
-      }
-    });
-  }
-  
-  const onFormActionCallback = () => {
-    if (category !== null) {
-      onUpdateCategory();
-    } else {
-      onAddCategory();
-    }
-  }
-  
-  const onLoadPage = () => {
-    let { category } = route.params;
-    
-    setCategory(null);
-    setName("");
-
-    if (category !== null) {
-      setCategory(category);
-      setName(category.name);
-    }
-  }
-  
-  React.useEffect(() => {
-    onLoadPage();
-  }, [route]);
-
-  return (
-    <View>
-      <Appbar.Header style={headerStyles.container}>
-        <Appbar.BackAction onPress={() => navigation.navigate('HomeItems')} />
-        <Appbar.Content title="Home-X" subtitle={(category ? "Atualizar Categoria: " + name : "Adicionar uma nova Categoria")} />
-      </Appbar.Header>
-
-      <AppLayout>
-        
-        <Card style={{marginBottom: 5}}>
-          <Card.Content>
-            <Text style={{marginBottom: 15, fontSize: 18}}>Informações da Categoria</Text>
-            <TextInput
-              label="Nome"
-              value={name}
-              onChangeText={text => setName(text)}
-              style={{marginBottom:10}}
-            />
-            <Button icon="content-save" mode="outlined" onPress={() => onFormActionCallback()} style={{marginTop: 15}}>
-              {(category ? "Atualizar" : "Cadastrar")}
-            </Button>
-          </Card.Content>
-        </Card>
-      </AppLayout>
-    </View>
-  );
-};
-
-const mapStateToProps = state => ({
-  userLogged: state.user.user,
-  viewHome: state.home.viewHome
-});
-
-export default connect(mapStateToProps)(HomeCategoryForm);
+export default connect(state => ({ viewHome: state.home.viewHome }))(HomeCategoryForm);

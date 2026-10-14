@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FAB, Portal, Provider, Colors } from 'react-native-paper';
+import { FAB, Portal, MD2LightTheme, Provider, MD2Colors as Colors } from 'react-native-paper';
 import { screenActionsStyles } from '../../AppStyles';
 
 const ScreenActions = (props) => {
@@ -10,19 +10,20 @@ const ScreenActions = (props) => {
   const { open } = state;
 
   return (
-    <Provider>
+    <Provider theme={MD2LightTheme}>
+      {props.children}
       <Portal>
-        {props.children}
         <FAB.Group
+          accessibilityLabel="Ações do inventário"
           color={Colors.white}
           fabStyle={screenActionsStyles.bgColor}
           open={open}
           icon={open ? 'menu-open' : 'menu'}
           actions={[
-            { 
-              icon: 'plus', 
+            {
+              icon: 'plus',
               label: 'Adicionar Categoria',
-              onPress: () => props.callback("add") 
+              onPress: () => { setState({ open: false }); props.callback("add"); }
             },
           ]}
           onStateChange={onStateChange}

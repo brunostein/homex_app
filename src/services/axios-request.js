@@ -5,86 +5,76 @@
  * Written by Bruno B. Stein <bruno.stein@tifx.com.br>, 2021
  */
 
-import axios from 'axios'
-import { refreshToken, signIn } from './api-accounts'
-import { getState, dispatchState } from '../helpers/app-helper'
-import { setNeedNewAuth } from '../redux/actions/user'
-import { setApiData, resetApiData } from '../redux/actions/api'
+import axios from 'axios';
+import config from '../config';
+import { getState, dispatchState } from '../helpers/app-helper';
+import { setNeedNewAuth } from '../redux/actions/user';
+import { setApiData, resetApiData } from '../redux/actions/api';
 
-const axiosApiInstance = axios.create();
+// Authentication uses a separate client so its failures cannot recurse through interceptors.
+const authClient = axios.create({ timeout: 15000 });
+const axiosApiInstance = axios.create({ timeout: 15000 });
+let signInPromise;
+let refreshPromise;
 
-// Request interceptor for API calls
-axiosApiInstance.interceptors.request.use(
-  async config => {
-    try {
-      let apiData = getState('api').api;
+const authenticate = async (refresh = false) => {
+  const apiData = getState('api').api;
+  const endpoint = refresh ? 'refresh-token' : 'signin';
+  const payload = refresh
+    ? { username: apiData?.username, refresh_token: apiData?.refresh_token }
+    : { username: config.api.user, password: config.api.pass };
+  const { data } = await authClient.post(`${config.api.host}/accounts/${endpoint}`, payload);
+  if (!data?.success || !data.data?.access_token) {
+    throw new Error('Não foi possível autenticar na API.');
+  }
+  dispatchState(setApiData(data.data));
+  return data.data;
+};
 
-      // SIGNIN API
-      if (!config.url.match(/accounts\/signin/) && apiData === null) {
-        console.log("AUTHENTICATE API");
-        
-        let res = await signIn();
-        if (res !== null && res.success !== undefined && res.success === true) {
-          dispatchState(setApiData(res.data));
-          apiData = getState('api').api;
-        }
-      }
-
-      config.headers = { 
-        'Content-Type': 'application/json',
-      }
-
-      if (apiData !== null) {
-        config.headers['Authorization'] = `${apiData.token_type} ${apiData.access_token}`;
-      }
-      return config;
-    } catch (err) {
-      console.log("Interceptor set Access Token error" + err);
+axiosApiInstance.interceptors.request.use(async request => {
+  if (!config.api.host) {
+    throw new Error('Configure EXPO_PUBLIC_API_URL no arquivo .env para conectar à API.');
+  }
+  const userToken = getState('user').user?.user_token;
+  if (userToken) request.headers.set('X-Homex-User-Token', userToken);
+  let apiData = getState('api').api;
+  if (!apiData) {
+    if (!signInPromise) {
+      signInPromise = authenticate().finally(() => { signInPromise = undefined; });
     }
-  },
-  error => {
-    Promise.reject(error)
+    apiData = await signInPromise;
+  }
+  request.headers.set('Content-Type', 'application/json');
+  request.headers.set('Authorization', `${apiData.token_type || 'Bearer'} ${apiData.access_token}`);
+  return request;
 });
 
-// Response interceptor for API calls
-axiosApiInstance.interceptors.response.use((response) => {
-  return response
-}, async function (error) {
-  try {
-    const originalRequest = error.config;
-
-    if (error.response !== undefined && 
-      error.response.status === 401) {
-        
-      if (originalRequest.url.match(/accounts\/refresh-token/) || originalRequest.url.match(/accounts\/signin/)) {
-        console.log("ERROR 401 refresh-token or signIn: " + originalRequest.url);
-        dispatchState(resetApiData());
-        dispatchState(setNeedNewAuth(true));
-        return;
-      } else {
-      
-        console.log("REFRESH TOKEN");
-
-        // REFRESH TOKEN
-        const apiData = getState('api').api;
-
-        let res = await refreshToken();
-
-        if (res !== undefined && res.success === true && res.data.access_token !== undefined) {      
-          dispatchState(setApiData(res.data));
-          axios.defaults.headers.common['Authorization'] = 'JWT ' + res.data.access_token;
-          return axiosApiInstance(originalRequest);
-        } else {
-          dispatchState(resetApiData());
-          dispatchState(setNeedNewAuth(true));
-        }
-      }
-    }
-  } catch (err) {
-    console.log("Interceptor Refresh Token error" + err);
+axiosApiInstance.interceptors.response.use(response => response, async error => {
+  if (error.response?.status === 401 && error.response?.data?.code === 'USER_SESSION_REQUIRED') {
+    dispatchState(setNeedNewAuth(true));
+    return Promise.reject(error);
   }
-
-  return Promise.reject(error);
+  const originalRequest = error.config;
+  if (error.response?.status !== 401 || !originalRequest) {
+    return Promise.reject(error);
+  }
+  if (originalRequest._retry) {
+    dispatchState(resetApiData());
+    dispatchState(setNeedNewAuth(true));
+    return Promise.reject(error);
+  }
+  originalRequest._retry = true;
+  try {
+    if (!refreshPromise) {
+      refreshPromise = authenticate(true).finally(() => { refreshPromise = undefined; });
+    }
+    await refreshPromise;
+    return axiosApiInstance(originalRequest);
+  } catch (refreshError) {
+    dispatchState(resetApiData());
+    dispatchState(setNeedNewAuth(true));
+    return Promise.reject(refreshError);
+  }
 });
 
 export default axiosApiInstance;

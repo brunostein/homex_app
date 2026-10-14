@@ -9,21 +9,9 @@ import axiosRequest from './axios-request'
 import config from '../config'
 
 export const signIn = async (email, password) => {
-  const BASE_URL = config.api.host;
-  const postData = {
-    email,
-    password
-  };
-
-  const result = await axiosRequest.post(`${BASE_URL}/homex/users/signin?relations=homes,homes_shared`, postData)
-    .then(({data}) => {
-      return data;
-  })
-  .catch (err => {
-    console.log(err);
-  });
-  return result;
-}
+  const { data } = await axiosRequest.post(`${config.api.host}/homex/users/signin?relations=homes,homes_shared`, { email, password });
+  return data;
+};
 
 export const getUserById = async (userId) => {
   const BASE_URL = config.api.host;
@@ -39,13 +27,6 @@ export const getUserById = async (userId) => {
 }
 
 export const signUp = async (userData) => {
-  const BASE_URL = config.api.host;
-  const result = await axiosRequest.post(`${BASE_URL}/homex/users/create`, userData)
-    .then(({data}) => {
-      return data;
-  })
-  .catch (err => {
-    console.log(err);
-  });
-  return result;
-}
+  const { data } = await axiosRequest.post(`${config.api.host}/homex/users/create`, userData);
+  return data;
+};

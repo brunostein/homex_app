@@ -16,7 +16,7 @@ const userLoggedReducer = (state = initialState, action) => {
   switch (action.type) {
     case SET_LOGGED_USER:
       if (state.user !== null) {
-        return {...state, user: Object.assign(state.user, action.payload)};
+        return {...state, user: {...state.user, ...action.payload}};
       }
       return {...state, user: action.payload};
     case SET_NEED_NEW_AUTH:

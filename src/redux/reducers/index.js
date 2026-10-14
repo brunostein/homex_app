@@ -5,6 +5,7 @@
  * Written by Bruno B. Stein <bruno.stein@tifx.com.br>, 2021
  */
 
+import unitMeasurementReducer from './unit_measurement';
 import apiReducer from './api';
 import userLoggedReducer from './user';
 import homeReducer from './home';
@@ -13,6 +14,7 @@ import {combineReducers} from 'redux';
 
 const reducers = combineReducers({
   api: apiReducer,
+  unit_measurement: unitMeasurementReducer,
   user: userLoggedReducer,
   home: homeReducer,
   category: categoryReducer
